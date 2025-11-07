@@ -1,14 +1,30 @@
-# Use a stable, maintained base image for Java 21
-FROM eclipse-temurin:21-jdk-jammy
+# Stage 1: Build the application
+FROM eclipse-temurin:21-jdk-jammy AS build
 
-# Set working directory inside container
 WORKDIR /app
 
-# Copy the built JAR into the container
-COPY target/vidhan-portfolio-0.0.1-SNAPSHOT.jar app.jar
+# Copy Maven/Gradle wrapper and dependencies first (for caching)
+COPY mvnw .
+COPY .mvn .mvn
+COPY pom.xml .
 
-# Expose the port Spring Boot runs on
+# Download dependencies (cached layer)
+RUN ./mvnw dependency:go-offline -B
+
+# Copy source code
+COPY src ./src
+
+# Build the application
+RUN ./mvnw clean package -DskipTests
+
+# Stage 2: Run the application
+FROM eclipse-temurin:21-jdk-jammy
+
+WORKDIR /app
+
+# Copy the built JAR from build stage
+COPY --from=build /app/target/vidhan-portfolio-0.0.1-SNAPSHOT.jar app.jar
+
 EXPOSE 8080
 
-# Command to run the application
-ENTRYPOINT ["java", "-jar", "/app.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]
